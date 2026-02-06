@@ -1,0 +1,102 @@
+[
+    {
+        "config": {
+            "learning_rates": 0.0005,
+            "fc_units": 512,
+            "dropouts": 0.0,
+            "batch_sizes": 32,
+            "activation": "leakyrelu"
+        },
+        "val_accuracy": 0.875
+    },
+    {
+        "config": {
+            "learning_rates": 0.0005,
+            "fc_units": 64,
+            "dropouts": 0.0,
+            "batch_sizes": 32,
+            "activation": "leakyrelu"
+        },
+        "val_accuracy": 0.8125
+    },
+    {
+        "config": {
+            "learning_rates": 0.0005,
+            "fc_units": 64,
+            "dropouts": 0.3,
+            "batch_sizes": 32,
+            "activation": "relu"
+        },
+        "val_accuracy": 0.8125
+    },
+    {
+        "config": {
+            "learning_rates": 0.001,
+            "fc_units": 128,
+            "dropouts": 0.5,
+            "batch_sizes": 32,
+            "activation": "relu"
+        },
+        "val_accuracy": 0.8125
+    },
+    {
+        "config": {
+            "learning_rates": 0.001,
+            "fc_units": 64,
+            "dropouts": 0.0,
+            "batch_sizes": 16,
+            "activation": "relu"
+        },
+        "val_accuracy": 0.8125
+    },
+    {
+        "config": {
+            "learning_rates": 0.001,
+            "fc_units": 256,
+            "dropouts": 0.0,
+            "batch_sizes": 16,
+            "activation": "relu"
+        },
+        "val_accuracy": 0.8125
+    },
+    {
+        "config": {
+            "learning_rates": 0.001,
+            "fc_units": 128,
+            "dropouts": 0.0,
+            "batch_sizes": 32,
+            "activation": "relu"
+        },
+        "val_accuracy": 0.8125
+    },
+    {
+        "config": {
+            "learning_rates": 0.001,
+            "fc_units": 256,
+            "dropouts": 0.3,
+            "batch_sizes": 16,
+            "activation": "relu"
+        },
+        "val_accuracy": 0.8125
+    },
+    {
+        "config": {
+            "learning_rates": 0.001,
+            "fc_units": 64,
+            "dropouts": 0.5,
+            "batch_sizes": 32,
+            "activation": "leakyrelu"
+        },
+        "val_accuracy": 0.8125
+    },
+    {
+        "config": {
+            "learning_rates": 0.001,
+            "fc_units": 64,
+            "dropouts": 0.3,
+            "batch_sizes": 32,
+            "activation": "leakyrelu"
+        },
+        "val_accuracy": 0.75
+    }
+]
