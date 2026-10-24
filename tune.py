@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -11,6 +12,7 @@ from torchvision import datasets
 from tqdm import tqdm
 
 DEVICE = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+OUTPUT_DIR = Path.cwd() / "outputs"
 
 torch.manual_seed(42)
 np.random.seed(42)
@@ -117,5 +119,5 @@ if __name__ == "__main__":
     results.sort(key=lambda x: x["val_accuracy"], reverse=True)
     top_configs = results[:10] if n_trials >= 10 else results
 
-    with open("hp_configs.json", "w") as f:
+    with open(OUTPUT_DIR / "best_hyperparameters.json", "w") as f:
         json.dump(top_configs, f, indent=4)

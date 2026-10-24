@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import torch
 from model import CNN, create_transforms, generate_class_weights
@@ -9,10 +10,11 @@ from torchvision import datasets
 from tqdm import tqdm
 
 DEVICE = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+OUTPUT_DIR = Path.cwd() / "outputs"
 
 
 def load_config():
-    with open("hp_configs.json") as f:
+    with open(OUTPUT_DIR / "best_hyperparameters.json") as f:
         configs = json.load(f)
     
     best_config = configs[0]["config"]
@@ -109,7 +111,8 @@ def train_model(config, train_dataset, val_dataset, test_dataset, class_weights,
                 'history': history,
                 'val_acc': epoch_val_balacc
             }
-            torch.save(checkpoint, "best_model_checkpoint.pth")
+            filename = f"best_model_epoch_{epoch+1}_val_bal_acc_{epoch_val_balacc:.4f}.pth"
+            torch.save(checkpoint, OUTPUT_DIR / filename)
 
         if (epoch + 1) % 10 == 0 or epoch == 0:
             print(f"Epoch [{epoch+1}/{epochs}] - Loss: {epoch_loss:.4f} | Train Acc: {epoch_train_acc:.4f} | Val Acc: {epoch_val_balacc:.4f}")
@@ -147,4 +150,4 @@ if __name__ == "__main__":
         'optimizer_state_dict': optimizer.state_dict(),
         'history': history
     }
-    torch.save(checkpoint, "final_checkpoint.pth")
+    torch.save(checkpoint, OUTPUT_DIR / "model_final.pth")
