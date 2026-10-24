@@ -1,8 +1,9 @@
+from collections import Counter
+
 import torch
-import torch.nn as nn
+from torch import nn
 from torch.utils.data import Subset
 from torchvision import transforms
-from collections import Counter
 
 DEVICE = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 

@@ -1,17 +1,14 @@
-import numpy as np
-from tqdm import tqdm
 import json
 
+import numpy as np
 import torch
-import torch.nn as nn
-import torch.optim as optim
-from torchvision import datasets
-from torch.utils.data import DataLoader, Subset
-from sklearn.model_selection import ParameterSampler
-from sklearn.model_selection import StratifiedShuffleSplit
-from sklearn.metrics import balanced_accuracy_score
-
 from model import CNN, create_transforms, generate_class_weights
+from sklearn.metrics import balanced_accuracy_score
+from sklearn.model_selection import ParameterSampler, StratifiedShuffleSplit
+from torch import nn, optim
+from torch.utils.data import DataLoader, Subset
+from torchvision import datasets
+from tqdm import tqdm
 
 DEVICE = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 

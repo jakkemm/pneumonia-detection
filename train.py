@@ -1,20 +1,18 @@
 import json
-from tqdm import tqdm
 
 import torch
-import torch.nn as nn
-import torch.optim as optim
-from torchvision import datasets, transforms
-from torch.utils.data import DataLoader
-from sklearn.metrics import balanced_accuracy_score
-
 from model import CNN, create_transforms, generate_class_weights
+from sklearn.metrics import balanced_accuracy_score
+from torch import nn, optim
+from torch.utils.data import DataLoader
+from torchvision import datasets
+from tqdm import tqdm
 
 DEVICE = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 
 
 def load_config():
-    with open(f"hp_configs.json") as f:
+    with open("hp_configs.json") as f:
         configs = json.load(f)
     
     best_config = configs[0]["config"]
@@ -143,7 +141,6 @@ if __name__ == "__main__":
     
     model, optimizer, history = train_model(config, train_ds, val_ds, test_ds, class_weights, epochs=epochs)
     
-    breakpoint()
     checkpoint = {
         'epoch': epochs,
         'model_state_dict': model.state_dict(),
