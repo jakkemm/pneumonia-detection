@@ -1,0 +1,25 @@
+
+[project]
+name = "pneumonia-detection-cnn"
+version = "0.1.0"
+description = "Pneumonia detection from chest X-ray images using a convolutional neural network."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "kagglehub",
+    "matplotlib",
+    "numpy",
+    "pandas",
+    "pillow",
+    "scikit-learn",
+    "seaborn",
+    "torch",
+    "torchvision",
+    "tqdm",
+]
+
+[dependency-groups]
+dev = [
+    "ipykernel>=7.4.0",
+    "jupyter>=1.1.1",
+]
