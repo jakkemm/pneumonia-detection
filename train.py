@@ -2,12 +2,13 @@ import json
 from pathlib import Path
 
 import torch
-from model import CNN, create_transforms, generate_class_weights
 from sklearn.metrics import balanced_accuracy_score
 from torch import nn, optim
 from torch.utils.data import DataLoader
 from torchvision import datasets
 from tqdm import tqdm
+
+from model import CNN, create_transforms, generate_class_weights
 
 DEVICE = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 OUTPUT_DIR = Path.cwd() / "outputs"
@@ -54,9 +55,11 @@ def train_model(config, train_dataset, val_dataset, test_dataset, class_weights,
     history = {
         "train_loss": [],
         "train_acc": [],
-        "val_acc": []
+        "val_balanced_acc": []
     }
-    best_val_acc = 0.0
+
+    best_val_bal_acc = -1.0
+    best_epoch = 0
 
     for epoch in tqdm(range(epochs)):
         # --------------- TRAINING ---------------
@@ -75,12 +78,12 @@ def train_model(config, train_dataset, val_dataset, test_dataset, class_weights,
             loss.backward()
             optimizer.step()
             
-            running_loss += loss.item()
+            running_loss += loss.item() * labels.size(0)
             _, preds = outputs.max(1)
             train_total += labels.size(0)
             train_correct += preds.eq(labels).sum().item()
 
-        epoch_loss = running_loss / len(train_loader)
+        epoch_loss = running_loss / len(train_dataset)
         epoch_train_acc = train_correct / train_total
 
         # --------------- VALIDATION ---------------
@@ -97,27 +100,33 @@ def train_model(config, train_dataset, val_dataset, test_dataset, class_weights,
                 val_labels.extend(labels.cpu().numpy())
                 val_preds.extend(preds.cpu().numpy())
         
-        epoch_val_balacc = balanced_accuracy_score(val_labels, val_preds)
+        epoch_val_bal_acc = balanced_accuracy_score(val_labels, val_preds)
         
         history["train_loss"].append(epoch_loss)
         history["train_acc"].append(epoch_train_acc)
-        history["val_acc"].append(epoch_val_balacc)
+        history["val_balanced_acc"].append(epoch_val_bal_acc)
 
         # Save checkpoint in case something goes wrong
-        if epoch_val_balacc > best_val_acc:
-            best_val_acc = epoch_val_balacc
+        if epoch_val_bal_acc > best_val_bal_acc:
+            best_val_bal_acc = epoch_val_bal_acc
+            best_epoch = epoch + 1
             
             checkpoint = {
-                'epoch': epoch + 1,
+                'epoch': best_epoch,
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
-                'history': history,
-                'val_acc': epoch_val_balacc
+                'val_balanced_acc': epoch_val_bal_acc,
+                'config': config
             }
             torch.save(checkpoint, OUTPUT_DIR / "best_model_epoch.pth")
 
         if (epoch + 1) % 10 == 0 or epoch == 0:
-            print(f"Epoch [{epoch+1}/{epochs}] - Loss: {epoch_loss:.4f} | Train Acc: {epoch_train_acc:.4f} | Val Acc: {epoch_val_balacc:.4f}")
+            print(
+                f"Epoch [{epoch+1}/{epochs}] - "
+                f"Loss: {epoch_loss:.4f} | "
+                f"Train Acc: {epoch_train_acc:.4f} | "
+                f"Balanced Val Acc: {epoch_val_bal_acc:.4f}"
+            )
 
     # --------------- TEST ---------------
     model.eval()
@@ -150,6 +159,7 @@ if __name__ == "__main__":
         'epoch': epochs,
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
-        'history': history
+        'history': history,
+        'config': config
     }
     torch.save(checkpoint, OUTPUT_DIR / "model_final.pth")
