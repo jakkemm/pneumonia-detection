@@ -11,10 +11,13 @@ from tqdm import tqdm
 
 DEVICE = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 OUTPUT_DIR = Path.cwd() / "outputs"
+DATA_DIR = Path.cwd() / "data" / "chest_xray"
+
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def load_config():
-    with open(OUTPUT_DIR / "best_hyperparameters.json") as f:
+    with open(OUTPUT_DIR / "sweep_results.json") as f:
         configs = json.load(f)
     
     best_config = configs[0]["config"]
@@ -23,9 +26,9 @@ def load_config():
 def prepare_datasets():
     train_tf, val_test_tf = create_transforms()
     
-    train_dataset = datasets.ImageFolder("data/train", transform=train_tf)
-    val_dataset = datasets.ImageFolder("data/val", transform=val_test_tf)
-    test_dataset = datasets.ImageFolder("data/test", transform=val_test_tf)
+    train_dataset = datasets.ImageFolder(DATA_DIR / "train", transform=train_tf)
+    val_dataset = datasets.ImageFolder(DATA_DIR / "val", transform=val_test_tf)
+    test_dataset = datasets.ImageFolder(DATA_DIR / "test", transform=val_test_tf)
     return train_dataset, val_dataset, test_dataset
 
 def train_model(config, train_dataset, val_dataset, test_dataset, class_weights, epochs=50):
@@ -111,8 +114,7 @@ def train_model(config, train_dataset, val_dataset, test_dataset, class_weights,
                 'history': history,
                 'val_acc': epoch_val_balacc
             }
-            filename = f"best_model_epoch_{epoch+1}_val_bal_acc_{epoch_val_balacc:.4f}.pth"
-            torch.save(checkpoint, OUTPUT_DIR / filename)
+            torch.save(checkpoint, OUTPUT_DIR / "best_model_epoch.pth")
 
         if (epoch + 1) % 10 == 0 or epoch == 0:
             print(f"Epoch [{epoch+1}/{epochs}] - Loss: {epoch_loss:.4f} | Train Acc: {epoch_train_acc:.4f} | Val Acc: {epoch_val_balacc:.4f}")

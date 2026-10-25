@@ -1,3 +1,5 @@
 data
 __pycache__
-checkpoints
+outputs
+.venv
+.DS_Store

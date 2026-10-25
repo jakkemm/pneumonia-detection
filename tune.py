@@ -12,7 +12,9 @@ from torchvision import datasets
 from tqdm import tqdm
 
 DEVICE = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+DATA_DIR = Path.cwd() / "data" / "chest_xray"
 OUTPUT_DIR = Path.cwd() / "outputs"
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 torch.manual_seed(42)
 np.random.seed(42)
@@ -79,8 +81,8 @@ def train_for_config(config, train_dataset, val_dataset, class_weights, epochs=5
 def prepare_datasets():
     train_tf, val_tf = create_transforms()
     
-    train_dataset = datasets.ImageFolder("data/train", transform=train_tf)
-    val_dataset = datasets.ImageFolder("data/val", transform=val_tf)
+    train_dataset = datasets.ImageFolder(DATA_DIR / "train", transform=train_tf)
+    val_dataset = datasets.ImageFolder(DATA_DIR / "val", transform=val_tf)
 
     # Reduce the training dataset for hyperparameter search
     train_dataset = reduce_dataset(train_dataset, fraction=0.1)
@@ -117,7 +119,6 @@ if __name__ == "__main__":
         })
     
     results.sort(key=lambda x: x["val_accuracy"], reverse=True)
-    top_configs = results[:10] if n_trials >= 10 else results
 
-    with open(OUTPUT_DIR / "best_hyperparameters.json", "w") as f:
-        json.dump(top_configs, f, indent=4)
+    with open(OUTPUT_DIR / "sweep_results.json", "w") as f:
+        json.dump(results, f, indent=4)
