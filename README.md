@@ -34,11 +34,11 @@ A separate tuning script searches across combinations of training and model para
 
 | Hyperparameter | Range |
 | --- | --- |
-| Fully-connected units | $\{ 64, \, 128, \, 256,  \,512 \}$ |
-| Learning rate | $\{ 0.001, \, 0.0005\}$ |
-| Batch size | $\{ 16, \, 32\}$ |
-| Dropout | $\{ 0.0, \, 0.3, \, 0.5\}$ |
-| Activation Function | $\{ \mathrm{relu}, \, \mathrm{leakyrelu}\}$ |
+| Fully-connected units | $\{64,\ 128,\ 256,\ 512\}$ |
+| Learning rate | $\{0.001,\ 0.0005\}$ |
+| Batch size | $\{16,\ 32\}$ |
+| Dropout | $\{0.0,\ 0.3,\ 0.5\}$ |
+| Activation Function | $\{\mathrm{relu},\ \mathrm{leakyrelu}\}$ |
 
 Configurations are compared using **balanced accuracy** on the validation set, since the class distributions are uneven.
 
