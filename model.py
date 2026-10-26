@@ -34,7 +34,7 @@ class CNN(nn.Module):
         
         layers = [
             nn.Flatten(),
-            nn.Linear(64*16*16, fc_units),
+            nn.LazyLinear(fc_units),
             act
         ]
         if dropout != 0.0:
