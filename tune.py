@@ -10,9 +10,8 @@ from torch.utils.data import DataLoader, Subset
 from torchvision import datasets
 from tqdm import tqdm
 
-from model import CNN, create_transforms, generate_class_weights
+from model import CNN, DEVICE, create_transforms, generate_class_weights
 
-DEVICE = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 DATA_DIR = Path.cwd() / "data" / "chest_xray"
 OUTPUT_DIR = Path.cwd() / "outputs"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -99,9 +98,6 @@ def prepare_datasets():
     val_dataset = Subset(val_full, val_idx)
 
     return train_dataset, val_dataset
-
-def sample_config(space):
-    return {k: np.random.choice(v) for k, v in space.items()}
 
 
 if __name__ == "__main__":
