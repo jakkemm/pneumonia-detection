@@ -90,7 +90,7 @@ def train_model(config, train_ds, val_ds, test_ds, path, epochs=100, patience=10
     best_acc = -1.0
     epochs_no_improvement = 0
 
-    for epoch in tqdm(range(1, epochs+1)):
+    for epoch in tqdm(range(1, epochs+1), desc="Training"):
         train_loss, train_acc = train_epoch(model, train_loader, criterion, optimizer)
         val_loss, val_acc, _, _ = evaluate(model, val_loader, criterion)
         
@@ -119,10 +119,10 @@ def train_model(config, train_ds, val_ds, test_ds, path, epochs=100, patience=10
 
         tqdm.write(
             f"Epoch [{epoch}/{epochs}] - "
-            f"Train Loss: {train_loss:.4f} | "
-            f"Train Acc: {train_acc:.4f} | "
-            f"Val Loss: {val_loss:.4f} | "
-            f"Val Acc: {val_acc:.4f} | "
+            f"Train Loss: {train_loss:.2%} | "
+            f"Train Acc: {train_acc:.2%} | "
+            f"Val Loss: {val_loss:.2%} | "
+            f"Val Acc: {val_acc:.2%} | "
             f"No improvement: {epochs_no_improvement}"
         )
 
