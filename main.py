@@ -41,11 +41,12 @@ def do_tune(tr, val, ts, epochs, patience, n_trials, seed, path):
     for config in tqdm(sampler, desc="Tuning"):
         checkpoint = train_model(
             config,
-            train_ds=tr, 
+            train_ds=tr,
             val_ds=val, 
-            test_ds=ts, 
-            path=path, 
-            epochs=epochs, 
+            test_ds=ts,
+            path=path,
+            seed=seed,
+            epochs=epochs,
             patience=patience,
             save_checkpoint=False
         )
@@ -101,6 +102,7 @@ if __name__ == "__main__":
     results = train_model(
         config, train, val, test,
         path=train_path,
+        seed=args.seed,
         epochs=args.epochs,
         patience=args.patience,
         evaluate_test=True

@@ -1,3 +1,5 @@
+import random
+
 import numpy as np
 import torch
 from sklearn.metrics import accuracy_score, confusion_matrix
@@ -7,8 +9,11 @@ from tqdm import tqdm
 
 from model import CNN, DEVICE
 
-torch.manual_seed(42)
-np.random.seed(42)
+
+def set_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
 
 def evaluate(model, loader, criterion):
     model.eval()
@@ -60,7 +65,10 @@ def train_epoch(model, loader, criterion, optimizer):
     return loss, acc
 
 
-def train_model(config, train_ds, val_ds, test_ds, path, epochs=100, patience=10, evaluate_test=False, save_checkpoint=True):
+def train_model(config, train_ds, val_ds, test_ds, path, seed, epochs=100, patience=10, evaluate_test=False, save_checkpoint=True):
+    assert not evaluate_test or save_checkpoint, "When evaluating test dataset, checkpoint needs to be saved."
+    set_seed(seed)
+
     lr = config["learning_rates"]
     bs = config["batch_sizes"]
     do = config["dropouts"]
@@ -153,6 +161,7 @@ def train_model(config, train_ds, val_ds, test_ds, path, epochs=100, patience=10
         print(f"True Pneumo      {fn:5d}             {tp:5d}")
         print(f"Precision={precision:.2%}  Recall={recall:.2%}  F1={f1:.2%}")
         
+        checkpoint["history"] = history
         checkpoint["test_metrics"] = {
             "accuracy": test_acc,
             "precision": precision,
@@ -160,5 +169,6 @@ def train_model(config, train_ds, val_ds, test_ds, path, epochs=100, patience=10
             "f1": f1,
             "confusion_matrix": cm.tolist(),
         }
+        torch.save(checkpoint, path)
 
     return checkpoint
