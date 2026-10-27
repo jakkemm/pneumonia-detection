@@ -7,6 +7,8 @@ from sklearn.model_selection import StratifiedGroupKFold
 from torch.utils.data import Dataset
 from torchvision import datasets
 
+from model import create_transforms
+
 BASE_DIR = Path.cwd()
 DATA_DIR = BASE_DIR / "data" / "chest_xray"
 OUTPUT_DIR = BASE_DIR / "outputs"
@@ -61,11 +63,13 @@ def _build_original_split_df():
         rows += [(str(Path(p).relative_to(BASE_DIR)), y, _patient_id(p), s) for p, y in ds.samples]
     
     df = pd.DataFrame(rows, columns=["path", "label", "patient", "split"])
-    df.to_csv(SPLIT_DIR / "original.csv", index=False)
-    return df
+    path = SPLIT_DIR / "original.csv"
+    df.to_csv(path, index=False)
+    return path
 
 def _build_pooled_split_df(seed=42):
-    df = _build_original_split_df()
+    path = _build_original_split_df()
+    df = pd.read_csv(path)
     
     splitter = StratifiedGroupKFold(n_splits=10, shuffle=True, random_state=seed)
     folds = [i for _, i in splitter.split(df, df.label, df.patient)]
@@ -89,6 +93,12 @@ def load_split(manifest, split, transform, frac=1.0, seed=42):
         )
 
     return ManifestDataset(df, transform)
+
+def prepare_datasets(manifest, train_frac=1.0, seed=42):
+    train_tf, val_tf = create_transforms()
+    train_ds = load_split(manifest, split="train", transform=train_tf, frac=train_frac, seed=seed)
+    val_ds = load_split(manifest, split="val", transform=val_tf, frac=1.0)
+    return train_ds, val_ds
 
 if __name__ == "__main__":
     _build_pooled_split_df()

@@ -8,11 +8,8 @@ from torch import nn, optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from model import CNN, DEVICE, create_transforms
-from utils import OUTPUT_DIR, SPLIT_DIR, load_split
-
-MANIFEST_ORIGINAL = SPLIT_DIR / "original.csv"
-
+from model import CNN, DEVICE
+from utils import OUTPUT_DIR
 
 torch.manual_seed(42)
 np.random.seed(42)
@@ -75,29 +72,12 @@ def train_for_config(config, train_dataset, val_dataset, epochs=5):
     return bal_acc, roc_auc
 
 
-if __name__ == "__main__":
-    # Hyperparameters to sweep
-    sweep = {
-        "fc_units": [64, 128, 256, 512],
-        "learning_rates": [1e-3, 5e-4],
-        "batch_sizes": [16, 32],
-        "dropouts": [0.0, 0.3, 0.5],
-        "activation": ["relu", "leakyrelu"]
-    }
-
-    n_trials = 25
-    epochs = 5
-
-    sampler = list(ParameterSampler(sweep, n_iter=n_trials, random_state=42))
-    
-    train_tf, val_tf = create_transforms()
-    train_dataset = load_split(MANIFEST_ORIGINAL, split="train", transform=train_tf, frac=0.1, seed=42)
-    val_dataset = load_split(MANIFEST_ORIGINAL, split="val", transform=val_tf)
-
+def tune_full(sweep, train_ds, val_ds, epochs, n_trials, seed):
+    sampler = list(ParameterSampler(sweep, n_iter=n_trials, random_state=seed))    
     results = []
-    
-    for i, config in enumerate(tqdm(sampler, desc="Tuning"), start=1):
-        bal_acc, roc_auc = train_for_config(config, train_dataset, val_dataset, epochs=epochs)
+
+    for config in tqdm(sampler, desc="Tuning"):
+        bal_acc, roc_auc = train_for_config(config, train_ds, val_ds, epochs=epochs)
         
         results.append({
             "config": config,
@@ -109,3 +89,5 @@ if __name__ == "__main__":
 
     with open(OUTPUT_DIR / "sweep_results.json", "w") as f:
         json.dump(results, f, indent=4)
+
+    return results

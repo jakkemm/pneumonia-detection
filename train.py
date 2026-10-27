@@ -1,4 +1,3 @@
-import argparse
 import json
 
 import numpy as np
@@ -8,10 +7,8 @@ from torch import nn, optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from model import CNN, DEVICE, create_transforms
-from utils import OUTPUT_DIR, SPLIT_DIR, load_split
-
-MANIFEST_ORIGINAL = SPLIT_DIR / "original.csv"
+from model import CNN, DEVICE
+from utils import OUTPUT_DIR
 
 torch.manual_seed(42)
 np.random.seed(42)
@@ -151,24 +148,13 @@ def train_model(config, train_dataset, val_dataset, epochs=100, patience=10):
 
     return model, optimizer, history
 
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Train the pneumonia detection CNN")
-    parser.add_argument("--epochs", type=int, default=100, help="Maximum number of training epochs")
-    parser.add_argument("--patience", type=int, default=10, help="Epochs without validation improvement before early stopping")
-    args = parser.parse_args()
-
-    config = load_config()
-    train_tf, val_tf = create_transforms()
-    train_ds = load_split(MANIFEST_ORIGINAL, "train", transform=train_tf)
-    val_ds = load_split(MANIFEST_ORIGINAL, "val", transform=val_tf)
-    
+def train_full(config, train_ds, val_ds, epochs, patience):    
     model, optimizer, history = train_model(
         config,
         train_ds,
         val_ds,
-        epochs=args.epochs,
-        patience=args.patience
+        epochs=epochs,
+        patience=patience
     )
     
     checkpoint = {
