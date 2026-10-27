@@ -1,8 +1,5 @@
-from collections import Counter
-
 import torch
 from torch import nn
-from torch.utils.data import Subset
 from torchvision import transforms
 
 DEVICE = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
@@ -70,22 +67,3 @@ def create_transforms():
         transforms.Normalize([0.5], [0.5])
     ])
     return train_transform, val_test_transform
-
-def generate_class_weights(train_dataset):
-    """
-    Function for generating class weights for criterion.
-    This is important, since the training data is imbalanced.
-    """
-    if isinstance(train_dataset, Subset):
-        full_targets = train_dataset.dataset.targets
-        labels = [full_targets[i] for i in train_dataset.indices]
-    else:
-        labels = train_dataset.targets
-
-    counter = Counter(labels)
-    num_classes = len(counter)
-    class_counts = [counter[i] for i in range(num_classes)]
-    total = float(sum(class_counts))
-
-    class_weights = [total / (num_classes * c) for c in class_counts]
-    return torch.tensor(class_weights, dtype=torch.float).to(DEVICE)
