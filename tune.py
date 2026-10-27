@@ -1,25 +1,23 @@
 import json
-from pathlib import Path
 
 import numpy as np
 import torch
 from sklearn.metrics import balanced_accuracy_score, roc_auc_score
-from sklearn.model_selection import ParameterSampler, StratifiedShuffleSplit
+from sklearn.model_selection import ParameterSampler
 from torch import nn, optim
-from torch.utils.data import DataLoader, Subset
-from torchvision import datasets
+from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from model import CNN, DEVICE, create_transforms, generate_class_weights
+from model import CNN, DEVICE, create_transforms
+from utils import OUTPUT_DIR, SPLIT_DIR, load_split
 
-DATA_DIR = Path.cwd() / "data" / "chest_xray"
-OUTPUT_DIR = Path.cwd() / "outputs"
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+MANIFEST_ORIGINAL = SPLIT_DIR / "original.csv"
+
 
 torch.manual_seed(42)
 np.random.seed(42)
 
-def train_for_config(config, train_dataset, val_dataset, class_weights, epochs=5):
+def train_for_config(config, train_dataset, val_dataset, epochs=5):
     lr = config["learning_rates"]
     bs = config["batch_sizes"]
     do = config["dropouts"]
@@ -34,7 +32,7 @@ def train_for_config(config, train_dataset, val_dataset, class_weights, epochs=5
         activation=ac,
         dropout=do,
     ).to(DEVICE)
-    criterion = nn.CrossEntropyLoss(weight=class_weights)
+    criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=lr)
 
     # --------------- TRAINING ---------------
@@ -76,29 +74,6 @@ def train_for_config(config, train_dataset, val_dataset, class_weights, epochs=5
 
     return bal_acc, roc_auc
 
-def prepare_datasets():
-    train_tf, val_tf = create_transforms()
-    
-    train_full = datasets.ImageFolder(DATA_DIR / "train", transform=train_tf)
-    val_full = datasets.ImageFolder(DATA_DIR / "train", transform=val_tf)
-
-    labels = np.array(train_full.targets)
-    indices = np.arange(len(labels))
-
-    # Splitting the original training data: 80% train, 20% validation
-    splitter = StratifiedShuffleSplit(n_splits=1, test_size=0.2, random_state=42)
-    train_idx, val_idx = next(splitter.split(indices, labels))
-
-    # Taking 10% of the 80% training partition for the random search
-    subset_splitter = StratifiedShuffleSplit(n_splits=1, train_size=0.1, random_state=42)
-    subset_pos, _ = next(subset_splitter.split(train_idx, labels[train_idx]))
-    search_train_idx = train_idx[subset_pos]
-
-    train_dataset = Subset(train_full, search_train_idx)
-    val_dataset = Subset(val_full, val_idx)
-
-    return train_dataset, val_dataset
-
 
 if __name__ == "__main__":
     # Hyperparameters to sweep
@@ -115,13 +90,14 @@ if __name__ == "__main__":
 
     sampler = list(ParameterSampler(sweep, n_iter=n_trials, random_state=42))
     
-    train_dataset, val_dataset = prepare_datasets()
-    class_weights = generate_class_weights(train_dataset)
+    train_tf, val_tf = create_transforms()
+    train_dataset = load_split(MANIFEST_ORIGINAL, split="train", transform=train_tf, frac=0.1, seed=42)
+    val_dataset = load_split(MANIFEST_ORIGINAL, split="val", transform=val_tf)
 
     results = []
     
     for i, config in enumerate(tqdm(sampler, desc="Tuning"), start=1):
-        bal_acc, roc_auc = train_for_config(config, train_dataset, val_dataset, class_weights, epochs=epochs)
+        bal_acc, roc_auc = train_for_config(config, train_dataset, val_dataset, epochs=epochs)
         
         results.append({
             "config": config,

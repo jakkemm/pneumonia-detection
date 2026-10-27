@@ -1,21 +1,17 @@
 import argparse
 import json
-from pathlib import Path
 
 import numpy as np
 import torch
-from sklearn.metrics import balanced_accuracy_score
-from sklearn.model_selection import StratifiedShuffleSplit
+from sklearn.metrics import accuracy_score, balanced_accuracy_score
 from torch import nn, optim
-from torch.utils.data import DataLoader, Subset
-from torchvision import datasets
+from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from model import CNN, DEVICE, create_transforms, generate_class_weights
+from model import CNN, DEVICE, create_transforms
+from utils import OUTPUT_DIR, SPLIT_DIR, load_split
 
-OUTPUT_DIR = Path.cwd() / "outputs"
-DATA_DIR = Path.cwd() / "data" / "chest_xray"
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+MANIFEST_ORIGINAL = SPLIT_DIR / "original.csv"
 
 torch.manual_seed(42)
 np.random.seed(42)
@@ -33,25 +29,7 @@ def load_config():
     best_config = configs[0]["config"]
     return best_config
 
-def prepare_datasets():
-    train_tf, val_test_tf = create_transforms()
-    
-    train_full = datasets.ImageFolder(DATA_DIR / "train", transform=train_tf)
-    val_full = datasets.ImageFolder(DATA_DIR / "train", transform=val_test_tf)
-
-    labels = np.array(train_full.targets)
-    indices = np.arange(len(labels))
-
-    # Splitting the original training data: 80% train, 20% validation
-    splitter = StratifiedShuffleSplit(n_splits=1, test_size=0.2, random_state=42)
-    train_idx, val_idx = next(splitter.split(indices, labels))
-
-    train_dataset = Subset(train_full, train_idx)
-    val_dataset = Subset(val_full, val_idx)
-
-    return train_dataset, val_dataset
-
-def train_model(config, train_dataset, val_dataset, class_weights, epochs=100, patience=10):
+def train_model(config, train_dataset, val_dataset, epochs=100, patience=10):
     lr = config["learning_rates"]
     bs = config["batch_sizes"]
     do = config["dropouts"]
@@ -67,14 +45,16 @@ def train_model(config, train_dataset, val_dataset, class_weights, epochs=100, p
         dropout=do
     ).to(DEVICE)
     
-    criterion = nn.CrossEntropyLoss(weight=class_weights)
+    criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=lr)
 
     history = {
         "train_loss": [],
         "train_acc": [],
+        "train_balanced_acc": [],
         "val_loss": [],
-        "val_balanced_acc": []
+        "val_acc": [],
+        "val_balanced_acc": [],
     }
 
     best_val_bal_acc = -1.0
@@ -85,50 +65,54 @@ def train_model(config, train_dataset, val_dataset, class_weights, epochs=100, p
         # --------------- TRAINING ---------------
         model.train()
         running_loss = 0.0
-        train_correct = 0
-        train_total = 0
-        
+        train_labels = []
+        train_preds = []
+
         for images, labels in train_loader:
             images = images.to(DEVICE)
             labels = labels.to(DEVICE)
-            
+
             optimizer.zero_grad()
             outputs = model(images)
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
-            
+
             running_loss += loss.item() * labels.size(0)
             _, preds = outputs.max(1)
-            train_total += labels.size(0)
-            train_correct += preds.eq(labels).sum().item()
+            train_labels.extend(labels.cpu().numpy())
+            train_preds.extend(preds.cpu().numpy())
 
         epoch_loss = running_loss / len(train_dataset)
-        epoch_train_acc = train_correct / train_total
+        epoch_train_acc = accuracy_score(train_labels, train_preds)
+        epoch_train_bal_acc = balanced_accuracy_score(train_labels, train_preds)
 
         # --------------- VALIDATION ---------------
         model.eval()
         val_labels = []
         val_preds = []
         val_loss_sum = 0.0
+
         with torch.no_grad():
             for images, labels in val_loader:
                 images = images.to(DEVICE)
                 labels = labels.to(DEVICE)
                 outputs = model(images)
-                
+
                 val_loss_sum += criterion(outputs, labels).item() * labels.size(0)
-                
                 _, preds = outputs.max(1)
                 val_labels.extend(labels.cpu().numpy())
                 val_preds.extend(preds.cpu().numpy())
-        
-        epoch_val_bal_acc = balanced_accuracy_score(val_labels, val_preds)
+
         epoch_val_loss = val_loss_sum / len(val_dataset)
-        
+        epoch_val_acc = accuracy_score(val_labels, val_preds)
+        epoch_val_bal_acc = balanced_accuracy_score(val_labels, val_preds)
+
         history["train_loss"].append(epoch_loss)
         history["train_acc"].append(epoch_train_acc)
+        history["train_balanced_acc"].append(epoch_train_bal_acc)
         history["val_loss"].append(epoch_val_loss)
+        history["val_acc"].append(epoch_val_acc)
         history["val_balanced_acc"].append(epoch_val_bal_acc)
 
         # Save checkpoint in case something goes wrong
@@ -175,14 +159,14 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     config = load_config()
-    train_ds, val_ds = prepare_datasets()
-    class_weights = generate_class_weights(train_ds)
+    train_tf, val_tf = create_transforms()
+    train_ds = load_split(MANIFEST_ORIGINAL, "train", transform=train_tf)
+    val_ds = load_split(MANIFEST_ORIGINAL, "val", transform=val_tf)
     
     model, optimizer, history = train_model(
         config,
         train_ds,
         val_ds,
-        class_weights,
         epochs=args.epochs,
         patience=args.patience
     )
