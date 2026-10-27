@@ -1,10 +1,11 @@
 import re
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 from PIL import Image
-from sklearn.model_selection import StratifiedGroupKFold
-from torch.utils.data import Dataset
+from sklearn.model_selection import StratifiedGroupKFold, train_test_split
+from torch.utils.data import Dataset, Subset
 from torchvision import datasets
 
 from model import create_transforms
@@ -94,6 +95,15 @@ def prepare_datasets(manifest):
     val_ds = load_split(manifest, split="val", transform=eval_tf)
     test_ds = load_split(manifest, split="test", transform=eval_tf)
     return train_ds, val_ds, test_ds
+
+def _shrink_train(train_ds, frac, seed=42):
+    indices = np.arange(len(train_ds))
+    labels = np.array(train_ds.labels)
+
+    subset_idx, _ = train_test_split(indices, train_size=frac, stratify=labels, random_state=seed)
+    train_ds = Subset(train_ds, subset_idx)
+
+    return train_ds
 
 if __name__ == "__main__":
     _build_pooled_split_df()

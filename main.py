@@ -8,6 +8,7 @@ from data import (
     OUTPUT_DIR,
     _build_original_split_df,
     _build_pooled_split_df,
+    _shrink_train,
     prepare_datasets,
 )
 from engine import train_model
@@ -17,8 +18,8 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Train the pneumonia detection CNN")
     parser.add_argument("--epochs", type=int, default=100, help="Maximum number of training epochs")
     parser.add_argument("--patience", type=int, default=10, help="Epochs without validation improvement before early stopping")
-    parser.add_argument("--epochs_tuning", type=int, default=5, help="Number of epochs in hyperparameter tuning")
-    parser.add_argument("--n_trials", type=int, default=25, help="Number of configurations to test for in hyperparameter tuning")
+    parser.add_argument("--epochs_tuning", type=int, default=10, help="Number of epochs in hyperparameter tuning")
+    parser.add_argument("--n_trials", type=int, default=20, help="Number of configurations to test for in hyperparameter tuning")
     parser.add_argument("--seed", type=int, default=42, help="Seed number for reproducibility")
     parser.add_argument("--run_original", action="store_true", help="Use original train-val-split")
     
@@ -32,8 +33,9 @@ def do_tune(tr, val, ts, epochs, patience, n_trials, seed, path):
         "dropouts": [0.0, 0.3, 0.5],
         "activation": ["relu", "leakyrelu"]
     }
+    sampler = list(ParameterSampler(sweep, n_iter=n_trials, random_state=seed))
 
-    sampler = list(ParameterSampler(sweep, n_iter=n_trials, random_state=seed))    
+    tr = _shrink_train(tr, frac=0.3, seed=seed)
     results = []
 
     for config in tqdm(sampler, desc="Tuning"):
@@ -50,7 +52,7 @@ def do_tune(tr, val, ts, epochs, patience, n_trials, seed, path):
 
         accuracy = checkpoint["best_val_acc"]
         tqdm.write(
-            f"Accuracy: {accuracy:.2%}"
+            f"Accuracy: {accuracy:.2%} | "
             f"fc_units: {config['fc_units']} | "
             f"lr: {config['learning_rates']} | "
             f"batch_size: {config['batch_sizes']} | "
@@ -80,7 +82,7 @@ if __name__ == "__main__":
         manifest = _build_pooled_split_df(seed=args.seed)
         file_prefix = f"s{args.seed}"
 
-    tune_path = OUTPUT_DIR / f"{file_prefix}_epochs{args.epochs_tuning}_ntrials{args.n_trials}.json"
+    tune_path = OUTPUT_DIR / f"sweep_{file_prefix}_epochs{args.epochs_tuning}_ntrials{args.n_trials}.json"
     train_path = OUTPUT_DIR / f"{file_prefix}_epochs{args.epochs}_patience{args.patience}.pth"
 
     train, val, test = prepare_datasets(manifest)
