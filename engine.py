@@ -60,7 +60,7 @@ def train_epoch(model, loader, criterion, optimizer):
     return loss, acc
 
 
-def train_model(config, train_ds, val_ds, test_ds, filename, epochs=100, patience=10):
+def train_model(config, train_ds, val_ds, test_ds, filename, epochs=100, patience=10, evaluate_test=False):
     lr = config["learning_rates"]
     bs = config["batch_sizes"]
     do = config["dropouts"]
@@ -104,11 +104,13 @@ def train_model(config, train_ds, val_ds, test_ds, filename, epochs=100, patienc
             best_acc = val_acc
             
             checkpoint = {
-                "epoch": epoch,
+                "config": config,
+                "best_epoch": epoch,
+                "best_val_acc": val_acc,
                 "model_state_dict": model.state_dict(),
                 "optimizer_state_dict": optimizer.state_dict(),
                 "history": history,
-                "config": config
+                "test_metrics": None,
             }
             torch.save(checkpoint, filename)
         else:
@@ -127,26 +129,35 @@ def train_model(config, train_ds, val_ds, test_ds, filename, epochs=100, patienc
             print(f"Early stopping at epoch {epoch}.")
             break
 
-    best_checkpoint = torch.load(filename, map_location=DEVICE, weights_only=False)
+    if evaluate_test:
+        checkpoint = torch.load(filename, map_location=DEVICE, weights_only=False)
 
-    model.load_state_dict(best_checkpoint['model_state_dict'])
-    model.to(DEVICE)
+        model.load_state_dict(checkpoint["model_state_dict"])
+        model.to(DEVICE)
 
-    _, test_acc, labels, preds = evaluate(model, test_loader, criterion)
+        _, test_acc, labels, preds = evaluate(model, test_loader, criterion)
 
-    cm = confusion_matrix(labels, preds)
-    tn, fp = cm[0]
-    fn, tp = cm[1]
+        cm = confusion_matrix(labels, preds)
+        tn, fp = cm[0]
+        fn, tp = cm[1]
 
-    precision = tp / (tp + fp)
-    recall = tp / (tp + fn)
-    f1 = 2 * (precision * recall) / (precision + recall)
+        precision = tp / (tp + fp)
+        recall = tp / (tp + fn)
+        f1 = 2 * (precision * recall) / (precision + recall)
 
-    print(f"\nBest checkpoint: epoch {best_checkpoint['epoch']}")
-    print(f"Test set ({len(labels)} images) - accuracy: {test_acc:.2%}")
-    print("                 Predicted Normal  Predicted Pneumo")
-    print(f"True Normal      {tn:5d}             {fp:5d}")
-    print(f"True Pneumo      {fn:5d}             {tp:5d}")
-    print(f"Precision={precision:.2%}  Recall={recall:.2%}  F1={f1:.2%}")
+        print(f"\nBest checkpoint: epoch {checkpoint['best_epoch']}")
+        print(f"Test set ({len(labels)} images) - accuracy: {test_acc:.2%}")
+        print("                 Predicted Normal  Predicted Pneumo")
+        print(f"True Normal      {tn:5d}             {fp:5d}")
+        print(f"True Pneumo      {fn:5d}             {tp:5d}")
+        print(f"Precision={precision:.2%}  Recall={recall:.2%}  F1={f1:.2%}")
+        
+        checkpoint["test_metrics"] = {
+            "accuracy": test_acc,
+            "precision": precision,
+            "recall": recall,
+            "f1": f1,
+            "confusion_matrix": cm.tolist(),
+        }
 
-    return model
+    return checkpoint
