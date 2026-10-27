@@ -81,24 +81,17 @@ def _build_pooled_split_df(seed=42):
     
     out.to_csv(SPLIT_DIR / f"pooled_s{seed}.csv", index=False)
 
-def load_split(manifest, split, transform, frac=1.0, seed=42):
+def load_split(manifest, split, transform):
     df = pd.read_csv(manifest)
     df = df[df.split == split]
-
-    if frac < 1.0:
-        df = (
-            df.groupby("label", group_keys=False)
-            .sample(frac=frac, random_state=seed)
-            .reset_index(drop=True)
-        )
-
     return ManifestDataset(df, transform)
 
-def prepare_datasets(manifest, train_frac=1.0, seed=42):
-    train_tf, val_tf = create_transforms()
-    train_ds = load_split(manifest, split="train", transform=train_tf, frac=train_frac, seed=seed)
-    val_ds = load_split(manifest, split="val", transform=val_tf, frac=1.0)
-    return train_ds, val_ds
+def prepare_datasets(manifest):
+    train_tf, eval_tf = create_transforms()
+    train_ds = load_split(manifest, split="train", transform=train_tf)
+    val_ds = load_split(manifest, split="val", transform=eval_tf)
+    test_ds = load_split(manifest, split="test", transform=eval_tf)
+    return train_ds, val_ds, test_ds
 
 if __name__ == "__main__":
     _build_pooled_split_df()
