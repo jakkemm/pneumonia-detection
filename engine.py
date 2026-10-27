@@ -60,7 +60,7 @@ def train_epoch(model, loader, criterion, optimizer):
     return loss, acc
 
 
-def train_model(config, train_ds, val_ds, test_ds, filename, epochs=100, patience=10, evaluate_test=False):
+def train_model(config, train_ds, val_ds, test_ds, path, epochs=100, patience=10, evaluate_test=False, save_checkpoint=True):
     lr = config["learning_rates"]
     bs = config["batch_sizes"]
     do = config["dropouts"]
@@ -112,7 +112,8 @@ def train_model(config, train_ds, val_ds, test_ds, filename, epochs=100, patienc
                 "history": history,
                 "test_metrics": None,
             }
-            torch.save(checkpoint, filename)
+            if save_checkpoint:
+                torch.save(checkpoint, path)
         else:
             epochs_no_improvement += 1
 
@@ -130,7 +131,7 @@ def train_model(config, train_ds, val_ds, test_ds, filename, epochs=100, patienc
             break
 
     if evaluate_test:
-        checkpoint = torch.load(filename, map_location=DEVICE, weights_only=False)
+        checkpoint = torch.load(path, map_location=DEVICE, weights_only=False)
 
         model.load_state_dict(checkpoint["model_state_dict"])
         model.to(DEVICE)

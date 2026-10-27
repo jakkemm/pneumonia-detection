@@ -20,11 +20,11 @@ def parse_args():
     parser.add_argument("--epochs_tuning", type=int, default=5, help="Number of epochs in hyperparameter tuning")
     parser.add_argument("--n_trials", type=int, default=25, help="Number of configurations to test for in hyperparameter tuning")
     parser.add_argument("--seed", type=int, default=42, help="Seed number for reproducibility")
-    parser.add_argument("--run_original", type=bool, default=False, help="Use original train-val-split")
+    parser.add_argument("--run_original", action="store_true", help="Use original train-val-split")
     
     return parser.parse_args()
 
-def do_tune(tr, val, ts, epochs, patience, n_trials, seed, filename):
+def do_tune(tr, val, ts, epochs, patience, n_trials, seed, path):
     sweep = {
         "fc_units": [64, 128, 256, 512],
         "learning_rates": [1e-3, 5e-4],
@@ -42,19 +42,30 @@ def do_tune(tr, val, ts, epochs, patience, n_trials, seed, filename):
             train_ds=tr, 
             val_ds=val, 
             test_ds=ts, 
-            filename=filename, 
+            path=path, 
             epochs=epochs, 
-            patience=patience
+            patience=patience,
+            save_checkpoint=False
+        )
+
+        accuracy = checkpoint["best_val_acc"]
+        tqdm.write(
+            f"Accuracy: {accuracy:.2%}"
+            f"fc_units: {config['fc_units']} | "
+            f"lr: {config['learning_rates']} | "
+            f"batch_size: {config['batch_sizes']} | "
+            f"dropout: {config['dropouts']} | "
+            f"activation: {config['activation']}"
         )
         
         results.append({
             "config": config,
-            "accuracy": checkpoint["best_val_acc"],
+            "accuracy": accuracy,
         })
     
     results.sort(key=lambda x: x["accuracy"], reverse=True)
 
-    with open(OUTPUT_DIR / filename, "w") as f:
+    with open(path, "w") as f:
         json.dump(results, f, indent=4)
 
     return results
@@ -69,25 +80,25 @@ if __name__ == "__main__":
         manifest = _build_pooled_split_df(seed=args.seed)
         file_prefix = f"s{args.seed}"
 
-    tune_fname = f"{file_prefix}_epochs{args.epochs_tuning}_ntrials{args.n_trials}.json"
-    train_fname = f"{file_prefix}_epochs{args.epochs}_patience{args.patience}.pth"
+    tune_path = OUTPUT_DIR / f"{file_prefix}_epochs{args.epochs_tuning}_ntrials{args.n_trials}.json"
+    train_path = OUTPUT_DIR / f"{file_prefix}_epochs{args.epochs}_patience{args.patience}.pth"
 
     train, val, test = prepare_datasets(manifest)
 
     tune_results = do_tune(
         train, val, test,
-        epochs_tuning=args.epochs_tuning,
+        epochs=args.epochs_tuning,
         patience=args.patience,
         n_trials=args.n_trials,
         seed=args.seed,
-        filename=tune_fname
+        path=tune_path
     )
 
     # Use config that obtained best results
-    config = tune_results[0]
+    config = tune_results[0]["config"]
     results = train_model(
         config, train, val, test,
-        filename=train_fname,
+        path=train_path,
         epochs=args.epochs,
         patience=args.patience,
         evaluate_test=True
