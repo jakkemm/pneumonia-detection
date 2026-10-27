@@ -6,10 +6,9 @@ from tqdm import tqdm
 
 from data import (
     OUTPUT_DIR,
-    _build_original_split_df,
-    _build_pooled_split_df,
-    _shrink_train,
+    build_manifest,
     prepare_datasets,
+    shrink_train,
 )
 from engine import train_model
 
@@ -21,7 +20,14 @@ def parse_args():
     parser.add_argument("--epochs_tuning", type=int, default=10, help="Number of epochs in hyperparameter tuning")
     parser.add_argument("--n_trials", type=int, default=20, help="Number of configurations to test for in hyperparameter tuning")
     parser.add_argument("--seed", type=int, default=42, help="Seed number for reproducibility")
-    parser.add_argument("--run_original", action="store_true", help="Use original train-val-split")
+    parser.add_argument(
+        "--mode",
+        type=str,
+        default="pool",
+        help="Dataset split mode: 'original' (original splits), "
+            "'original_regrouped' (80/20 train-val split), "
+            "'pool' (pool all data and create new splits).",
+    )
     
     return parser.parse_args()
 
@@ -35,7 +41,7 @@ def do_tune(tr, val, ts, epochs, patience, n_trials, seed, path):
     }
     sampler = list(ParameterSampler(sweep, n_iter=n_trials, random_state=seed))
 
-    tr = _shrink_train(tr, frac=0.3, seed=seed)
+    tr = shrink_train(tr, frac=0.3, seed=seed)
     results = []
 
     for config in tqdm(sampler, desc="Tuning"):
@@ -76,12 +82,8 @@ def do_tune(tr, val, ts, epochs, patience, n_trials, seed, path):
 if __name__ == "__main__":
     args = parse_args()
     
-    if args.run_original:
-        manifest = _build_original_split_df()
-        file_prefix = "original"
-    else:
-        manifest = _build_pooled_split_df(seed=args.seed)
-        file_prefix = f"s{args.seed}"
+    manifest = build_manifest(args.mode, args.seed)
+    file_prefix = f"{args.mode}_s{args.seed}" if args.mode != "original" else "original"
 
     tune_path = OUTPUT_DIR / f"sweep_{file_prefix}_epochs{args.epochs_tuning}_ntrials{args.n_trials}.json"
     train_path = OUTPUT_DIR / f"{file_prefix}_epochs{args.epochs}_patience{args.patience}.pth"

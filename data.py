@@ -14,6 +14,7 @@ BASE_DIR = Path.cwd()
 DATA_DIR = BASE_DIR / "data" / "chest_xray"
 OUTPUT_DIR = BASE_DIR / "outputs"
 SPLIT_DIR = BASE_DIR / "splits"
+ORIGINAL_SPLIT = SPLIT_DIR / "original.csv"
 
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 SPLIT_DIR.mkdir(parents=True, exist_ok=True)
@@ -61,11 +62,27 @@ def _build_original_split_df():
     rows = []
     for s in SPLITS:
         ds = datasets.ImageFolder(DATA_DIR / s)
-        rows += [(str(Path(p).relative_to(BASE_DIR)), y, _patient_id(p), s) for p, y in ds.samples]
+        rows += [(str(Path(p).relative_to(BASE_DIR)), y, _patient_id(p), s, s) for p, y in ds.samples]
     
-    df = pd.DataFrame(rows, columns=["path", "label", "patient", "split"])
+    df = pd.DataFrame(rows, columns=["path", "label", "patient", "origin", "split"])
     path = SPLIT_DIR / "original.csv"
     df.to_csv(path, index=False)
+    return path
+
+def _build_original_regrouped_split_df(seed=42):
+    path = _build_original_split_df()
+    df = pd.read_csv(path)
+    
+    out = df.copy()
+    out["split"] = np.where(out.origin == "test", "test", "train")
+    dev = out[out.origin != "test"]
+    
+    splitter = StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=seed)
+    _, val_pos = next(splitter.split(dev, dev.label, dev.patient))
+    
+    out.loc[dev.index[val_pos], "split"] = "val"
+    path = SPLIT_DIR / f"original_regrouped_s{seed}.csv"
+    out.to_csv(path, index=False)
     return path
 
 def _build_pooled_split_df(seed=42):
@@ -84,6 +101,14 @@ def _build_pooled_split_df(seed=42):
     out.to_csv(path, index=False)
     return path
 
+def build_manifest(mode, seed):    
+    if mode == "original":
+        return _build_original_split_df()
+    if mode == "original_regrouped":
+        return _build_original_split_df(seed)
+    if mode == "pool":
+        return _build_pooled_split_df(seed)
+
 def load_split(manifest, split, transform):
     df = pd.read_csv(manifest)
     df = df[df.split == split]
@@ -96,7 +121,7 @@ def prepare_datasets(manifest):
     test_ds = load_split(manifest, split="test", transform=eval_tf)
     return train_ds, val_ds, test_ds
 
-def _shrink_train(train_ds, frac, seed=42):
+def shrink_train(train_ds, frac, seed=42):
     indices = np.arange(len(train_ds))
     labels = np.array(train_ds.labels)
 
@@ -106,4 +131,4 @@ def _shrink_train(train_ds, frac, seed=42):
     return train_ds
 
 if __name__ == "__main__":
-    _build_pooled_split_df()
+    _build_original_regrouped_split_df(42)
