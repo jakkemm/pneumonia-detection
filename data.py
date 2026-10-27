@@ -79,7 +79,9 @@ def _build_pooled_split_df(seed=42):
     out.loc[folds[0], "split"] = "test"
     out.loc[folds[1], "split"] = "val"
     
-    out.to_csv(SPLIT_DIR / f"pooled_s{seed}.csv", index=False)
+    path = SPLIT_DIR / f"pooled_s{seed}.csv"
+    out.to_csv(path, index=False)
+    return path
 
 def load_split(manifest, split, transform):
     df = pd.read_csv(manifest)
