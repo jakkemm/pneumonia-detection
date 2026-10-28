@@ -1,8 +1,9 @@
+import copy
 import random
 
 import numpy as np
 import torch
-from sklearn.metrics import accuracy_score, confusion_matrix
+from sklearn.metrics import accuracy_score, confusion_matrix, roc_auc_score
 from torch import nn, optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -18,7 +19,7 @@ def set_seed(seed):
 def evaluate(model, loader, criterion):
     model.eval()
     total_loss = 0.0
-    all_labels, all_preds = [], []
+    all_labels, all_preds, all_probs = [], [], []
 
     with torch.no_grad():
         for images, labels in loader:
@@ -30,14 +31,22 @@ def evaluate(model, loader, criterion):
 
             total_loss += loss.item() * labels.size(0)
 
+            probs = torch.softmax(outputs, dim=1)[:, 1]
             preds = outputs.argmax(dim=1)
+
             all_labels.extend(labels.cpu().numpy())
             all_preds.extend(preds.cpu().numpy())
+            all_probs.extend(probs.cpu().numpy())
 
-    avg_loss = total_loss / len(loader.dataset)
-    acc = accuracy_score(all_labels, all_preds)
+    y_true = np.asarray(all_labels)
+    y_pred = np.asarray(all_preds)
+    y_prob = np.asarray(all_probs)
 
-    return avg_loss, acc, all_labels, all_preds
+    loss = total_loss / len(loader.dataset)
+    accuracy = accuracy_score(y_true, y_pred)
+    auc = roc_auc_score(y_true, y_prob)
+
+    return loss, accuracy, auc, y_true, y_pred, y_prob
 
 def train_epoch(model, loader, criterion, optimizer):
     model.train()
@@ -88,35 +97,38 @@ def train_model(config, train_ds, val_ds, test_ds, path, seed, epochs=100, patie
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=lr)
 
-    history = {
-        "train_loss": [],
-        "train_acc": [],
-        "val_loss": [],
-        "val_acc": [],
-    }
+    history = []
 
-    best_acc = -1.0
+    best_val_loss = float("inf")
     epochs_no_improvement = 0
 
     for epoch in tqdm(range(1, epochs+1), desc="Training"):
         train_loss, train_acc = train_epoch(model, train_loader, criterion, optimizer)
-        val_loss, val_acc, _, _ = evaluate(model, val_loader, criterion)
+        val_loss, val_acc, val_auc, _, _, _ = evaluate(model, val_loader, criterion)
         
-        history["train_loss"].append(train_loss)
-        history["train_acc"].append(train_acc)
-        history["val_loss"].append(val_loss)
-        history["val_acc"].append(val_acc)
+        history.append({
+            "epoch": epoch,
+            "train_loss": train_loss,
+            "train_acc": train_acc,
+            "val_loss": val_loss,
+            "val_acc": val_acc,
+            "val_auc": val_auc
+        })
         
-        if val_acc > best_acc:
+        if val_loss < best_val_loss:
             epochs_no_improvement = 0
-            best_acc = val_acc
+            best_val_loss = val_loss
             
             checkpoint = {
                 "config": config,
                 "best_epoch": epoch,
-                "best_val_acc": val_acc,
-                "model_state_dict": model.state_dict(),
-                "optimizer_state_dict": optimizer.state_dict(),
+                "val_at_best_epoch": {
+                    "loss": val_loss,
+                    "acc": val_acc,
+                    "auc": val_auc,
+                },
+                "model_state_dict": copy.deepcopy(model.state_dict()),
+                "optimizer_state_dict": copy.deepcopy(optimizer.state_dict()),
                 "history": history,
                 "test_metrics": None,
             }
@@ -127,9 +139,9 @@ def train_model(config, train_ds, val_ds, test_ds, path, seed, epochs=100, patie
 
         tqdm.write(
             f"Epoch [{epoch}/{epochs}] - "
-            f"Train Loss: {train_loss:.2%} | "
+            f"Train Loss: {train_loss:.4f} | "
             f"Train Acc: {train_acc:.2%} | "
-            f"Val Loss: {val_loss:.2%} | "
+            f"Val Loss: {val_loss:.4f} | "
             f"Val Acc: {val_acc:.2%} | "
             f"No improvement: {epochs_no_improvement}"
         )
@@ -140,35 +152,41 @@ def train_model(config, train_ds, val_ds, test_ds, path, seed, epochs=100, patie
 
     if evaluate_test:
         checkpoint = torch.load(path, map_location=DEVICE, weights_only=False)
-
         model.load_state_dict(checkpoint["model_state_dict"])
-        model.to(DEVICE)
 
-        _, test_acc, labels, preds = evaluate(model, test_loader, criterion)
+        _, test_acc, auc, y_true, y_pred, y_prob = evaluate(model, test_loader, criterion)
 
-        cm = confusion_matrix(labels, preds)
+        cm = confusion_matrix(y_true, y_pred, labels=[0, 1])
         tn, fp = cm[0]
         fn, tp = cm[1]
 
+        sensitivity = tp / (tp + fn)
+        specificity = tn / (tn + fp)
         precision = tp / (tp + fp)
-        recall = tp / (tp + fn)
-        f1 = 2 * (precision * recall) / (precision + recall)
+        f1 = 2 * tp / (2 * tp + fp + fn)
 
         print(f"\nBest checkpoint: epoch {checkpoint['best_epoch']}")
-        print(f"Test set ({len(labels)} images) - accuracy: {test_acc:.2%}")
+        print(f"Test set ({len(y_true)} images) - Accuracy: {test_acc:.2%}")
         print("                 Predicted Normal  Predicted Pneumo")
         print(f"True Normal      {tn:5d}             {fp:5d}")
         print(f"True Pneumo      {fn:5d}             {tp:5d}")
-        print(f"Precision={precision:.2%}  Recall={recall:.2%}  F1={f1:.2%}")
+        print(
+            f"Sensitivity={sensitivity:.2%}  Specificity={specificity:.2%}  "
+            f"AUC={auc:.4f}  Accuracy={test_acc:.2%}"
+        )
         
         checkpoint["history"] = history
         checkpoint["test_metrics"] = {
             "accuracy": test_acc,
+            "sensitivity": sensitivity,
+            "specificity": specificity,
+            "roc_auc": auc,
             "precision": precision,
-            "recall": recall,
             "f1": f1,
             "confusion_matrix": cm.tolist(),
         }
+        
         torch.save(checkpoint, path)
+        np.savez(path.with_suffix(".npz"), y_true=y_true, y_pred=y_pred, y_prob=y_prob) 
 
     return checkpoint

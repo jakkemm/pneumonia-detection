@@ -4,12 +4,7 @@ import json
 from sklearn.model_selection import ParameterSampler
 from tqdm import tqdm
 
-from data import (
-    OUTPUT_DIR,
-    build_manifest,
-    prepare_datasets,
-    shrink_train,
-)
+from data import OUTPUT_DIR, build_manifest, prepare_datasets, shrink_train
 from engine import train_model
 
 
@@ -57,9 +52,9 @@ def do_tune(tr, val, ts, epochs, patience, n_trials, seed, path):
             save_checkpoint=False
         )
 
-        accuracy = checkpoint["best_val_acc"]
+        auc = checkpoint["val_at_best_epoch"]["auc"]
         tqdm.write(
-            f"Accuracy: {accuracy:.2%} | "
+            f"AUC: {auc:.4f} | "
             f"fc_units: {config['fc_units']} | "
             f"lr: {config['learning_rates']} | "
             f"batch_size: {config['batch_sizes']} | "
@@ -69,10 +64,10 @@ def do_tune(tr, val, ts, epochs, patience, n_trials, seed, path):
         
         results.append({
             "config": config,
-            "accuracy": accuracy,
+            "val_at_best_epoch": checkpoint["val_at_best_epoch"],
         })
     
-    results.sort(key=lambda x: x["accuracy"], reverse=True)
+    results.sort(key=lambda x: x["val_at_best_epoch"]["auc"], reverse=True)
 
     with open(path, "w") as f:
         json.dump(results, f, indent=4)
@@ -83,21 +78,26 @@ if __name__ == "__main__":
     args = parse_args()
     
     manifest = build_manifest(args.mode, args.seed)
-    file_prefix = f"{args.mode}_s{args.seed}" if args.mode != "original" else "original"
+    file_prefix = f"{args.mode}_s{args.seed}"
 
     tune_path = OUTPUT_DIR / f"sweep_{file_prefix}_epochs{args.epochs_tuning}_ntrials{args.n_trials}.json"
     train_path = OUTPUT_DIR / f"{file_prefix}_epochs{args.epochs}_patience{args.patience}.pth"
 
     train, val, test = prepare_datasets(manifest)
 
-    tune_results = do_tune(
-        train, val, test,
-        epochs=args.epochs_tuning,
-        patience=args.patience,
-        n_trials=args.n_trials,
-        seed=args.seed,
-        path=tune_path
-    )
+    if tune_path.exists():
+        print("Found existing hyperparameters tuning results. Skipping tuning.")
+        with open(tune_path, "r") as file:
+            tune_results = json.load(file)
+    else:
+        tune_results = do_tune(
+            train, val, test,
+            epochs=args.epochs_tuning,
+            patience=args.patience,
+            n_trials=args.n_trials,
+            seed=args.seed,
+            path=tune_path
+        )
 
     # Use config that obtained best results
     config = tune_results[0]["config"]
