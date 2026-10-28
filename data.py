@@ -105,7 +105,7 @@ def build_manifest(mode, seed):
     if mode == "original":
         return _build_original_split_df()
     if mode == "original_regrouped":
-        return _build_original_split_df(seed)
+        return _build_original_regrouped_split_df(seed)
     if mode == "pool":
         return _build_pooled_split_df(seed)
 
