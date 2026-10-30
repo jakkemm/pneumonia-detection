@@ -10,6 +10,12 @@ from tqdm import tqdm
 
 from model import CNN, DEVICE
 
+LR = 1e-3
+FC_UNITS = 128
+DROPOUT = 0.3
+BATCH_SIZE = 16
+ACTIVATION = "relu"
+
 
 def set_seed(seed):
     random.seed(seed)
@@ -44,7 +50,7 @@ def evaluate(model, loader, criterion):
 
     loss = total_loss / len(loader.dataset)
     accuracy = accuracy_score(y_true, y_pred)
-    auc = roc_auc_score(y_true, y_prob)
+    auc = roc_auc_score(y_true, y_prob) if np.unique(y_true).size == 2 else np.nan
 
     return loss, accuracy, auc, y_true, y_pred, y_prob
 
@@ -74,28 +80,21 @@ def train_epoch(model, loader, criterion, optimizer):
     return loss, acc
 
 
-def train_model(config, train_ds, val_ds, test_ds, path, seed, epochs=100, patience=10, evaluate_test=False, save_checkpoint=True):
-    assert not evaluate_test or save_checkpoint, "When evaluating test dataset, checkpoint needs to be saved."
+def train_model(train_ds, val_ds, test_ds, path, seed, epochs=100, patience=10):
     set_seed(seed)
 
-    lr = config["learning_rates"]
-    bs = config["batch_sizes"]
-    do = config["dropouts"]
-    fc = config["fc_units"]
-    ac = config["activation"]
-
-    train_loader = DataLoader(train_ds, batch_size=bs, shuffle=True)
-    val_loader = DataLoader(val_ds, batch_size=bs, shuffle=False)
-    test_loader = DataLoader(test_ds, batch_size=bs, shuffle=False)
+    train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True)
+    val_loader = DataLoader(val_ds, batch_size=BATCH_SIZE, shuffle=False)
+    test_loader = DataLoader(test_ds, batch_size=BATCH_SIZE, shuffle=False)
 
     model = CNN(
-        fc_units=fc, 
-        activation=ac, 
-        dropout=do
+        fc_units=FC_UNITS,
+        activation=ACTIVATION,
+        dropout=DROPOUT
     ).to(DEVICE)
     
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=lr)
+    optimizer = optim.Adam(model.parameters(), lr=LR)
 
     history = []
 
@@ -120,7 +119,6 @@ def train_model(config, train_ds, val_ds, test_ds, path, seed, epochs=100, patie
             best_val_loss = val_loss
             
             checkpoint = {
-                "config": config,
                 "best_epoch": epoch,
                 "val_at_best_epoch": {
                     "loss": val_loss,
@@ -132,8 +130,7 @@ def train_model(config, train_ds, val_ds, test_ds, path, seed, epochs=100, patie
                 "history": history,
                 "test_metrics": None,
             }
-            if save_checkpoint:
-                torch.save(checkpoint, path)
+            torch.save(checkpoint, path)
         else:
             epochs_no_improvement += 1
 
@@ -150,43 +147,42 @@ def train_model(config, train_ds, val_ds, test_ds, path, seed, epochs=100, patie
             print(f"Early stopping at epoch {epoch}.")
             break
 
-    if evaluate_test:
-        checkpoint = torch.load(path, map_location=DEVICE, weights_only=False)
-        model.load_state_dict(checkpoint["model_state_dict"])
+    checkpoint = torch.load(path, map_location=DEVICE, weights_only=False)
+    model.load_state_dict(checkpoint["model_state_dict"])
 
-        _, test_acc, auc, y_true, y_pred, y_prob = evaluate(model, test_loader, criterion)
+    _, test_acc, auc, y_true, y_pred, y_prob = evaluate(model, test_loader, criterion)
 
-        cm = confusion_matrix(y_true, y_pred, labels=[0, 1])
-        tn, fp = cm[0]
-        fn, tp = cm[1]
+    cm = confusion_matrix(y_true, y_pred, labels=[0, 1])
+    tn, fp = cm[0]
+    fn, tp = cm[1]
 
-        sensitivity = tp / (tp + fn)
-        specificity = tn / (tn + fp)
-        precision = tp / (tp + fp)
-        f1 = 2 * tp / (2 * tp + fp + fn)
+    sensitivity = tp / (tp + fn) if tp + fn else np.nan
+    specificity = tn / (tn + fp) if tn + fp else np.nan
+    precision = tp / (tp + fp) if tp + fp else 0.0
+    f1 = 2 * tp / (2 * tp + fp + fn) if 2 * tp + fp + fn else 0.0
 
-        print(f"\nBest checkpoint: epoch {checkpoint['best_epoch']}")
-        print(f"Test set ({len(y_true)} images) - Accuracy: {test_acc:.2%}")
-        print("                 Predicted Normal  Predicted Pneumo")
-        print(f"True Normal      {tn:5d}             {fp:5d}")
-        print(f"True Pneumo      {fn:5d}             {tp:5d}")
-        print(
-            f"Sensitivity={sensitivity:.2%}  Specificity={specificity:.2%}  "
-            f"AUC={auc:.4f}  Accuracy={test_acc:.2%}"
-        )
-        
-        checkpoint["history"] = history
-        checkpoint["test_metrics"] = {
-            "accuracy": test_acc,
-            "sensitivity": sensitivity,
-            "specificity": specificity,
-            "roc_auc": auc,
-            "precision": precision,
-            "f1": f1,
-            "confusion_matrix": cm.tolist(),
-        }
-        
-        torch.save(checkpoint, path)
-        np.savez(path.with_suffix(".npz"), y_true=y_true, y_pred=y_pred, y_prob=y_prob) 
+    print(f"\nBest checkpoint: epoch {checkpoint['best_epoch']}")
+    print(f"Test set ({len(y_true)} images) - Accuracy: {test_acc:.2%}")
+    print("                 Predicted Normal  Predicted Pneumo")
+    print(f"True Normal      {tn:5d}             {fp:5d}")
+    print(f"True Pneumo      {fn:5d}             {tp:5d}")
+    print(
+        f"Sensitivity={sensitivity:.2%}  Specificity={specificity:.2%}  "
+        f"AUC={auc:.4f}  Accuracy={test_acc:.2%}"
+    )
+    
+    checkpoint["history"] = history
+    checkpoint["test_metrics"] = {
+        "accuracy": test_acc,
+        "sensitivity": sensitivity,
+        "specificity": specificity,
+        "roc_auc": auc,
+        "precision": precision,
+        "f1": f1,
+        "confusion_matrix": cm.tolist(),
+    }
+    
+    torch.save(checkpoint, path)
+    np.savez(path.with_suffix(".npz"), y_true=y_true, y_pred=y_pred, y_prob=y_prob) 
 
     return checkpoint
